@@ -1,0 +1,85 @@
+FROM node:18-alpine AS base
+
+# RUN apt-get update && apt-get upgrade -y
+
+
+RUN apk add --no-cache libc6-compat
+
+RUN apk update
+
+RUN npm i -g turbo \
+      && npm i -g typescript
+
+ENV PNPM_HOME="/root/.local/share/pnpm"
+
+ENV PATH="${PATH}:${PNPM_HOME}"
+
+RUN wget -qO- https://get.pnpm.io/install.sh | ENV="$HOME/.shrc" SHELL="$(which sh)" sh -
+
+RUN corepack enable
+
+#############################################
+
+
+FROM base AS pruned
+
+WORKDIR /app
+
+ARG APP
+
+COPY . .
+
+RUN turbo prune --scope=$APP --docker
+
+#############################################
+FROM base AS installer
+
+
+RUN apk add --no-cache libc6-compat
+
+RUN apk update
+
+WORKDIR /app
+
+ARG APP
+
+# COPY --from=pruned /app/out/json/ .
+
+COPY --from=pruned /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
+
+COPY --from=pruned /app/out/pnpm-workspace.yaml ./pnpm-workspace.yaml
+
+COPY --from=pruned /app/out/json/ .
+# RUN corepack enable
+RUN apk add --update python3 make g++ && rm -rf /var/cache/apk/*
+
+RUN pnpm install --frozen-lockfile
+
+COPY --from=pruned /app/out/full/ .
+
+# FROM installer AS builder
+
+# ARG APP
+
+# WORKDIR /app
+
+# COPY --from=installer /app ./
+
+# RUN turbo build --filter ${APP}
+
+# ENTRYPOINT [ "tail", "-f", "/dev/null" ]
+# ENTRYPOINT [ "turbo", "start"]
+# FROM builder AS runner
+
+# ARG APP
+
+# WORKDIR /app
+
+# RUN addgroup --system --gid 1001 nodejs
+
+# RUN adduser --system --uid 1001 nextjs
+
+# USER nextjs
+
+# COPY --from=builder --chown=nextjs:nodejs /app .
+# COPY --from=builder  /app .

@@ -1,0 +1,62 @@
+
+
+FROM node:18-alpine AS base
+
+# RUN apt-get update && apt-get upgrade -y
+
+
+RUN apk add --no-cache libc6-compat
+RUN apk update
+
+RUN   npm i -g turbo \
+      && npm i -g @nestjs/cli \
+      && npm i -g prisma \
+      && npm i -g typescript 
+
+ENV PNPM_HOME="/root/.local/share/pnpm"
+ENV PATH="${PATH}:${PNPM_HOME}"
+RUN wget -qO- https://get.pnpm.io/install.sh | ENV="$HOME/.shrc" SHELL="$(which sh)" sh -
+
+RUN corepack enable
+
+#############################################
+
+
+FROM base AS pruned
+
+WORKDIR /app
+ARG APP
+
+COPY . .
+
+RUN turbo prune --scope=$APP --docker
+
+#############################################
+FROM base AS installer
+
+
+RUN apk add --no-cache libc6-compat
+RUN apk update
+WORKDIR /app
+
+ARG APP
+
+ENV NODE_ENV=development
+
+COPY --from=pruned /app/out/json/ .
+COPY --from=pruned /app/out/full/packages/tsconfig/base.json ./packages/tsconfig/base.json
+COPY --from=pruned /app/out/full/packages/db/tsconfig.json ./packages/db/tsconfig.json
+COPY --from=pruned /app/out/full/packages/db/src/index.ts ./packages/db/src/index.ts
+
+# COPY --from=pruned /app/out/json .
+COPY --from=pruned /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
+COPY --from=pruned /app/out/pnpm-workspace.yaml ./pnpm-workspace.yaml
+
+
+# ENTRYPOINT [ "tail", "-f", "/dev/null" ]
+
+RUN apk add --update python3 make g++ && rm -rf /var/cache/apk/*
+RUN pnpm install --frozen-lockfile
+COPY --from=pruned /app/out/full .
+
+# RUN corepack enable

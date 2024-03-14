@@ -1,0 +1,13 @@
+{
+    "extends": ["//"],
+    "pipeline": { 
+        "build": {
+            "cache": false,
+            "dependsOn": []
+        },
+        "dev": {
+            "dependsOn": ["io-types#build"]
+        }
+    }
+
+}

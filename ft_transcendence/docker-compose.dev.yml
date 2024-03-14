@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  server:
+    container_name: server
+    ports:
+      - "8080:8080"
+      - "4444:5555"
+    build:
+      args:
+        APP: server
+      context: .
+      dockerfile: Dockerfile.server.dev
+    volumes:
+      - ./apps/server:/app/apps/server
+        # turbo start --no-cache --filter server;
+    command: >
+      sh -c "
+        echo 'Starting service...';
+        turbo start:dev --no-cache --filter server;
+      "
+    env_file:
+      - ./.env
+    depends_on:
+      psql:
+        condition: service_healthy
+  client:
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./apps/client:/app/apps/client
+    depends_on:
+      - server
+    build: 
+      args:
+        APP: client
+      context: .
+      dockerfile: Dockerfile.client.dev
+    container_name: client
+    entrypoint: turbo dev --filter client
+  psql:
+    container_name: psql
+    image: postgres:latest
+    env_file:
+      - ./.env
+    volumes:
+      - postgres_data_volume:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+volumes:
+  postgres_data_volume:

@@ -1,0 +1,257 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User Roles Enum
+enum Roles {
+  User
+}
+
+// User Account Status Enum
+enum Status {
+  Accepted
+}
+
+enum ConversationTypes {
+  Group
+  Single
+}
+
+model Media {
+  // auto generated values
+  uid       String   @id @default(uuid())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // BASIC INFOS
+  mimtype String
+  size    Float
+  url     String @unique
+  name    String
+
+  // User Relation
+  uploader    User   @relation(fields: [uploaderUid], references: [uid])
+  uploaderUid String @map("uploader_uid")
+
+  // Messages Relation
+  // message Message?
+
+  @@index([uid])
+  @@map("medias")
+}
+
+model User {
+  // auto generated values
+  uid       String   @id @default(uuid())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // login infos
+  email String @unique
+
+  // Blocking relations
+  blockedBy User[] @relation("block")
+  blocked   User[] @relation("block")
+  // blockedUsers User[] @relation("blocked-users")
+
+  // Profile and Cover Images
+  profileImage String @default("https://upload.wikimedia.org/wikipedia/commons/7/72/Default-welcomer.png")
+
+  // BASIC INFOS
+  firstName String  @map("first_name")
+  lastName  String  @map("last_name")
+  login     String  @unique
+  url       String
+  phone     String
+  kind      String
+  points    Decimal
+  roles     Roles[] @default([User])
+  games     GameOnUsers[]
+
+  // Two Factor
+  twoFactorEnabled Boolean
+  twoFactorSecret  String?
+
+  // Media Relation
+  media Media[]
+
+  status String @default("offline")
+
+  // Messages Relation
+  messages Message[]
+
+  achivements Achivement[]
+
+  // Conversations Relations
+  conversations      Conversation[] @relation("conversations")
+  adminConversations Conversation[] @relation("owned-conversations")
+
+  ban Conversation[] @relation("banned-conversations")
+
+  muted MutedConversation[]
+
+  // friendship
+  myFriends          Friend[]       @relation("my-friends")
+  friendOf           Friend[]       @relation("friend-of")
+  ownedConversations Conversation[]
+
+  @@index([uid])
+  @@map("users")
+}
+
+model MutedConversation {
+  uid String @id @default(uuid())
+
+  user    User   @relation(fields: [userUid], references: [uid])
+  userUid String
+
+  conversation    Conversation @relation(fields: [conversationUid], references: [uid])
+  conversationUid String
+
+  startDate DateTime @default(now())
+  until     DateTime
+
+  @@unique([userUid, conversationUid])
+}
+
+model Conversation {
+  uid  String            @id @default(uuid())
+  name String?
+  type ConversationTypes
+
+  visibility ChatVisibility? @default(Public)
+
+  password String?
+
+  participants User[] @relation("conversations")
+
+  mut   MutedConversation[]
+  owner User?                @relation(fields: [userUid], references: [uid])
+
+  admins User[] @relation("owned-conversations")
+
+  ban User[] @relation("banned-conversations")
+
+  profileImage String?
+
+  messages Message[]
+  userUid  String?
+}
+
+enum ChatVisibility {
+  Public
+  Private
+  Protected
+}
+
+model Message {
+  // attributes
+  uid     String  @id @default(uuid())
+  content String?
+
+  // user realtion
+  sender    User?   @relation(fields: [senderUid], references: [uid])
+  senderUid String? @map("sender_uid")
+
+  // media relation
+  // media    Media?  @relation(fields: [mediaUid], references: [uid])
+  // mediaUid String? @unique @map("media_uid")
+
+  // conversation relation
+  conversation    Conversation? @relation(fields: [conversationUid], references: [uid])
+  conversationUid String?       @map("conversation_uid")
+
+  // metadata
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // friendship
+
+  @@map("messages")
+}
+
+model Friend {
+  uid String @id @default(uuid())
+
+  user1    User   @relation("my-friends", fields: [user1uid], references: [uid])
+  user1uid String
+  user2    User   @relation("friend-of", fields: [user2uid], references: [uid])
+  user2uid String
+
+  status FriendStatus @default(Pending)
+
+  bannedBy String?
+
+  @@unique([user1uid, user2uid])
+  @@unique([user2uid, user1uid])
+  @@map("friends")
+}
+
+enum FriendStatus {
+  Pending
+  Accepted
+  Banned
+}
+
+model Achivement {
+  uid String @id @default(uuid())
+
+  name  String
+  rule  String
+  grade AchivementGrade
+  user User @relation(fields: [userUid], references: [uid])
+  userUid String
+}
+
+enum AchivementGrade {
+  FirstWin
+  FirstLose
+  Welcome
+}
+
+
+model GameOnUsers {
+  game   Game   @relation(fields: [gameId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  gameId String
+
+  user   User   @relation(fields: [userId], references: [uid], onDelete: Cascade, onUpdate: NoAction)
+  userId String
+
+  winner Boolean
+  score  Int
+
+  
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@id([gameId, userId])
+}
+
+enum GameStatus {
+  INVITING
+  WAITING
+  STARTING
+  ENDING
+}
+
+model Game {
+  id String @id @default(cuid())
+
+  status GameStatus @default(WAITING)
+
+  players GameOnUsers[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("games")
+}
